@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>eBay Alert App</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    .section { margin-bottom: 2rem; }
+    label { display: block; margin: 0.5rem 0 0.2rem; }
+    input, button { padding: 0.5rem; margin-bottom: 1rem; width: 100%; max-width: 300px; }
+    .message { margin-top: 1rem; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>eBay Alert App</h1>
+
+  <div class="section">
+    <h2>Register</h2>
+    <label>Email</label>
+    <input type="email" id="register-email" />
+
+    <label>Password</label>
+    <input type="password" id="register-password" />
+
+    <label>Telegram Chat ID</label>
+    <input type="text" id="telegram-chat-id" placeholder="123456789" />
+
+    <label><input type="checkbox" id="email-alerts" checked /> Enable Email Alerts</label>
+    <label><input type="checkbox" id="telegram-alerts" /> Enable Telegram Alerts</label>
+
+    <button onclick="register()">Register</button>
+    <div class="message" id="register-message"></div>
+  </div>
+
+  <div class="section">
+    <h2>Saved Searches</h2>
+    <label>Search Query</label>
+    <input type="text" id="search-query" maxlength="20" />
+    <div style="font-size: 0.8rem; color: gray;">Free tier: 1 word only. Upgrade to add more.</div>
+
+    <label>Min Price</label>
+    <input type="number" id="min-price" />
+
+    <label>Max Price</label>
+    <input type="number" id="max-price" />
+
+    <label>Locations</label>
+    <input type="text" id="locations" placeholder="USA" />
+
+    <button onclick="saveSearch()">Save Search</button>
+    <button onclick="loadSearches()">Load My Searches</button>
+    <div class="message" id="search-message"></div>
+    <ul id="search-results"></ul>
+  </div>
+
+  <div class="section">
+    <button onclick="logout()">Logout</button>
+  </div>
+
+  <script>
+    let token = localStorage.getItem("token") || "";
+
+    function register() {
+      const email = document.getElementById("register-email").value;
+      const password = document.getElementById("register-password").value;
+      const telegramChatId = document.getElementById("telegram-chat-id").value;
+      const emailAlerts = document.getElementById("email-alerts").checked;
+      const telegramAlerts = document.getElementById("telegram-alerts").checked;
+
+      fetch("https://ebay-alert-app.onrender.com/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          telegram_chat_id: telegramChatId,
+          email_alerts_enabled: emailAlerts,
+          telegram_alerts_enabled: telegramAlerts,
+        }),
+      })
+      .then((res) => res.json())
+      .then((data) => {
+        document.getElementById("register-message").innerText =
+          data.email ? "Registered successfully!" : data.detail || "Registration failed.";
+      });
+    }
+
+    function saveSearch() {
+      const query = document.getElementById("search-query").value.trim();
+      const wordCount = query.split(/\s+/).length;
+      if (wordCount > 1) {
+        document.getElementById("search-message").innerText = "Free users can only use 1 search word.";
+        return;
+      }
+
+      fetch("https://ebay-alert-app.onrender.com/saved-searches", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          search_query: query,
+          min_price: parseFloat(document.getElementById("min-price").value),
+          max_price: parseFloat(document.getElementById("max-price").value),
+          locations: document.getElementById("locations").value,
+        }),
+      })
+      .then((res) => res.json())
+      .then((data) => {
+        document.getElementById("search-message").innerText =
+          data.id ? "Search saved!" : data.detail || "Failed to save search.";
+      });
+    }
+
+    function loadSearches() {
+      fetch("https://ebay-alert-app.onrender.com/saved-searches", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => res.json())
+      .then((searches) => {
+        const ul = document.getElementById("search-results");
+        ul.innerHTML = "";
+        searches.forEach((s) => {
+          const li = document.createElement("li");
+          li.textContent = `${s.search_query} - $${s.min_price} to $${s.max_price}`;
+          ul.appendChild(li);
+        });
+      });
+    }
+
+    function logout() {
+      localStorage.removeItem("token");
+      token = "";
+      document.getElementById("search-message").innerText = "Logged out.";
+    }
+  </script>
+</body>
+</html>
