@@ -1,7 +1,6 @@
-
 uvicorn
 fastapi
-postmark
+postmark==1.0.0  # Adjust version as necessary based on your environment
 sqlalchemy
 psycopg2-binary
 passlib

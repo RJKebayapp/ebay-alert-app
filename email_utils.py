@@ -1,22 +1,22 @@
+# email_utils.py
 
-from postmark.models import SendEmailRequest
-from postmark import ApiClient
-from postmark.apis.sending_api_api import SendingAPIApi
+from postmark.core import PMMail
+import os
 
-def send_registration_email(email: str):
-    # Create a new email request
-    email_request = SendEmailRequest(
-        From="your-email@example.com",  # Your "from" email
-        To=email,  # Recipient's email
-        Subject="Welcome to eBay Alerts",
-        TextBody="Please verify your email by clicking the link below.",
-        HtmlBody="<html><body><p>Please verify your email by clicking the link below.</p></body></html>",
-        Tag="welcome-email"  # Optional tag to identify the email
+def send_registration_email(recipient_email: str):
+    # Get the API token and sender email from environment variables
+    POSTMARK_API_TOKEN = os.getenv("POSTMARK_API_TOKEN", "your_default_api_token")
+    sender_email = os.getenv("EMAIL_USERNAME", "noreply@example.com")
+
+    # Construct the email message using PMMail
+    email = PMMail(
+        api_key=POSTMARK_API_TOKEN,
+        subject="Registration Successful",
+        sender=sender_email,
+        to=recipient_email,
+        text_body="Thank you for registering with our service!"
     )
-
-    # Send the email
-    api_client = ApiClient(configuration)
-    sending_api = SendingAPIApi(api_client)
-    response = sending_api.send_email(email_request)
-
+    
+    # Send the email and return the response (or handle errors as needed)
+    response = email.send()
     return response
