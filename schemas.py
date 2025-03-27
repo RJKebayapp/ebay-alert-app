@@ -1,47 +1,19 @@
-from pydantic import BaseModel, Field, validator
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, EmailStr
+from typing import Optional
+from datetime import datetime
 
-# Use str instead of EmailStr to avoid validation issues
-class UserBase(BaseModel):
-    email: str
-    
-    @validator('email')
-    def validate_email(cls, v):
-        # Simple email validation
-        if '@' not in v:
-            raise ValueError('Invalid email format')
-        return v
+# Existing schemas
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8)
 
-class UserCreate(UserBase):
-    password: str = Field(..., min_length=6)
-    
-    @validator('password')
-    def password_strength(cls, v):
-        if len(v) < 6:
-            raise ValueError('Password must be at least 6 characters')
-        return v
-
-class UserUpdate(UserBase):
-    email: Optional[str] = None
-    password: Optional[str] = None
-    
-    @validator('password')
-    def password_strength(cls, v):
-        if v is not None and len(v) < 6:
-            raise ValueError('Password must be at least 6 characters')
-        return v
-
-class UserLogin(UserBase):
+class UserLogin(BaseModel):
+    email: EmailStr
     password: str
 
-class UserOut(UserBase):
+class UserResponse(BaseModel):
     id: int
-
-class UserResponse(UserBase):
-    id: int
-    
-    class Config:
-        from_attributes = True
+    email: str
 
 class TokenData(BaseModel):
     email: Optional[str] = None
@@ -50,26 +22,18 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
-class SavedSearchBase(BaseModel):
-    search_query: str
-    min_price: Optional[float] = None
-    max_price: Optional[float] = None
-    frequency: Optional[str] = "daily"  # daily, hourly, etc.
+# New schemas for saved searches
+class SavedSearchCreate(BaseModel):
+    search_query: str = Field(..., min_length=1, max_length=200)
+    min_price: Optional[float] = Field(None, ge=0)
+    max_price: Optional[float] = Field(None, ge=0)
+    frequency: Optional[str] = Field(default="daily", pattern="^(daily|hourly)$")
     locations: Optional[str] = None
-    listing_type: Optional[str] = "all"  # all, auction, buy_it_now
+    listing_type: Optional[str] = Field(default="all", pattern="^(all|auction|buy_it_now)$")
 
-class SavedSearchCreate(SavedSearchBase):
-    pass
-
-class SavedSearchUpdate(SavedSearchBase):
-    search_query: Optional[str] = None
-    
-class SavedSearchResponse(SavedSearchBase):
+class SavedSearchResponse(SavedSearchCreate):
     id: int
     user_id: int
-    
-    class Config:
-        from_attributes = True
 
-class ErrorResponse(BaseModel):
-    detail: str
+    class Config:
+        orm_mode = True

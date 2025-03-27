@@ -9,8 +9,9 @@ import traceback
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
 
-# Import only essential components
+# Import routers
 from auth import router as auth_router
+from saved_searches import router as saved_searches_router
 from models import Base
 from database_config import engine
 
@@ -34,8 +35,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include only the auth router for now
+# Include routers
 app.include_router(auth_router, tags=["Authentication"])
+app.include_router(saved_searches_router, tags=["Saved Searches"])
 
 # Root endpoint
 @app.get("/")
