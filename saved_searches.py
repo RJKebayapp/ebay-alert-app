@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from models import SavedSearch, User
 from schemas import SavedSearchCreate, SavedSearchResponse
-from auth import get_current_user
+from token_auth import get_current_user
 from database_config import get_async_session
 
 router = APIRouter()
