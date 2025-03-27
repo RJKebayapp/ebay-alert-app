@@ -1,13 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from .models import User
-from .utils import hash_password, generate_jwt_token, get_db
-from .email_utils import send_registration_email
-from .models import User
-from .utils import hash_password, generate_jwt_token, get_db
-from .email_utils import send_registration_email
-
+from models import User  # Absolute import (replacing relative import)
+from utils import hash_password, generate_jwt_token, get_db  # Absolute import (replacing relative import)
+from email_utils import send_registration_email  # Absolute import (replacing relative import)
 
 router = APIRouter()
 
@@ -35,3 +31,4 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
     send_registration_email(new_user.email)
 
     return {"message": "Registration successful, please check your email for confirmation"}
+
