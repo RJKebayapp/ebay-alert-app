@@ -11,21 +11,23 @@ from fastapi.concurrency import run_in_threadpool
 
 app = FastAPI()
 
-# Include routers
+# Include all routers
 app.include_router(auth_router)
 app.include_router(protected_router)
 app.include_router(user_router)
 app.include_router(saved_search_router)
 
-# Add a simple root endpoint
+# Root endpoint
 @app.get("/")
 def root():
     return {"message": "Hello from the eBay Alert App!"}
 
-# Startup event: Create tables and launch background task
 @app.on_event("startup")
 async def startup_event():
     # Create tables if they don't exist
     await run_in_threadpool(Base.metadata.create_all, bind=engine)
-    # Launch background task for checking saved searches
+    # Add a short delay to ensure tables are created
+    await asyncio.sleep(2)
+    # Launch the background task
     asyncio.create_task(check_saved_searches())
+
