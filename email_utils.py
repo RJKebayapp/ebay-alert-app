@@ -8,7 +8,7 @@ POSTMARK_TOKEN = os.getenv("POSTMARK_TOKEN", "4815cb10-234b-40fd-b407-e48790f30f
 
 def send_registration_email(to_email: str):
     try:
-        client = postmark.PMMail(
+        message = postmark.Message(
             api_key=POSTMARK_TOKEN,
             subject="Welcome to the eBay 'Buy It Now' Alert App!",
             sender="noreply@yourdomain.com",
@@ -16,7 +16,7 @@ def send_registration_email(to_email: str):
             text_body="Thank you for registering with the eBay Alert App. You're now ready to start receiving alerts!",
             tag="registration-confirmation"
         )
-        client.send()
+        message.send()
         print(f"Confirmation email sent to {to_email}")
     except Exception as e:
         print(f"Failed to send email: {e}")
