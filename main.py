@@ -24,9 +24,9 @@ def root():
 @app.on_event("startup")
 async def startup_event():
     # Create tables if they don't exist using the async engine
-    await engine.run_sync(Base.metadata.create_all)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     # Short delay to be sure everything is set
     await asyncio.sleep(2)
     # Launch the background task for checking saved searches
     asyncio.create_task(check_saved_searches())
-
