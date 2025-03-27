@@ -10,7 +10,8 @@
     label { display: block; margin: 0.5rem 0 0.2rem; }
     input, button { padding: 0.5rem; margin-bottom: 1rem; width: 100%; max-width: 300px; }
     .message { margin-top: 1rem; font-weight: bold; }
-    .error { color: red; font-size: 0.9rem; }
+    .message.success { color: green; }
+    .message.error { color: red; }
   </style>
 </head>
 <body>
@@ -23,7 +24,7 @@
 
     <label>Password (min. 8 characters)</label>
     <input type="password" id="register-password" />
-    <div style="font-size: 0.8rem; color: gray;">Password must be at least 8 characters.</div>
+    <div style="font-size: 0.8rem; color: gray;" id="password-help">Password must be at least 8 characters.</div>
 
     <label>Telegram Chat ID</label>
     <input type="text" id="telegram-chat-id" placeholder="123456789" />
@@ -69,17 +70,10 @@
       const telegramChatId = document.getElementById("telegram-chat-id").value;
       const emailAlerts = document.getElementById("email-alerts").checked;
       const telegramAlerts = document.getElementById("telegram-alerts").checked;
-      const messageBox = document.getElementById("register-message");
 
-      messageBox.innerText = "";
-
-      // Basic frontend validation
-      if (!email.includes("@") || !email.includes(".")) {
-        messageBox.innerText = "Please enter a valid email address.";
-        return;
-      }
       if (password.length < 8) {
-        messageBox.innerText = "Password must be at least 8 characters.";
+        document.getElementById("register-message").innerText = "Password must be at least 8 characters.";
+        document.getElementById("register-message").classList.add("error");
         return;
       }
 
@@ -96,16 +90,21 @@
       })
       .then((res) => res.json())
       .then((data) => {
+        const messageElement = document.getElementById("register-message");
         if (data.token) {
           localStorage.setItem("token", data.token);
           token = data.token;
-          messageBox.innerText = "Registered successfully!";
-        } else if (data?.detail) {
-          const message = Array.isArray(data.detail) ? data.detail.map(e => e.msg).join(", ") : data.detail;
-          messageBox.innerText = message;
+          messageElement.innerText = "Registered successfully! Please check your email for confirmation.";
+          messageElement.classList.add("success");
         } else {
-          messageBox.innerText = "Registration failed.";
+          messageElement.innerText = data.detail || "Registration failed.";
+          messageElement.classList.add("error");
         }
+      })
+      .catch((error) => {
+        const messageElement = document.getElementById("register-message");
+        messageElement.innerText = `Error: ${error.message}`;
+        messageElement.classList.add("error");
       });
     }
 
