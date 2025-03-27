@@ -7,7 +7,6 @@ from saved_search_routes import router as saved_search_router
 from alert_scheduler import check_saved_searches
 from models import Base
 from database_config import engine
-from fastapi.concurrency import run_in_threadpool
 
 app = FastAPI()
 
@@ -24,10 +23,10 @@ def root():
 
 @app.on_event("startup")
 async def startup_event():
-    # Create tables if they don't exist
-    await run_in_threadpool(Base.metadata.create_all, bind=engine)
-    # Add a short delay to ensure tables are created
+    # Create tables if they don't exist using the async engine
+    await engine.run_sync(Base.metadata.create_all)
+    # Short delay to be sure everything is set
     await asyncio.sleep(2)
-    # Launch the background task
+    # Launch the background task for checking saved searches
     asyncio.create_task(check_saved_searches())
 
