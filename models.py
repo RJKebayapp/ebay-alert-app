@@ -6,12 +6,21 @@ import enum
 Base = declarative_base()
 
 class SubscriptionTier(enum.Enum):
-    """
-    Enum representing different subscription tiers for users.
-    """
+    """Enum representing different subscription tiers for users."""
     FREE = "free"
     BASIC = "basic"
     PREMIUM = "premium"
+
+class SearchFrequency(enum.Enum):
+    """Enum for search update frequencies."""
+    DAILY = "daily"
+    HOURLY = "hourly"
+
+class ListingType(enum.Enum):
+    """Enum for listing types."""
+    ALL = "all"
+    AUCTION = "auction"
+    BUY_IT_NOW = "buy_it_now"
 
 class User(Base):
     __tablename__ = "users"
@@ -34,9 +43,14 @@ class SavedSearch(Base):
     search_query = Column(String, nullable=False)
     min_price = Column(Float, nullable=True)
     max_price = Column(Float, nullable=True)
-    frequency = Column(String, nullable=False, default="daily")  # daily, hourly
+    
+    # Use Enum for frequency
+    frequency = Column(Enum(SearchFrequency), nullable=False, default=SearchFrequency.DAILY)
+    
     locations = Column(String, nullable=True)
-    listing_type = Column(String, nullable=False, default="all")  # all, auction, buy_it_now
+    
+    # Use Enum for listing type
+    listing_type = Column(Enum(ListingType), nullable=False, default=ListingType.ALL)
     
     # Relationships
     user = relationship("User", back_populates="saved_searches")
