@@ -1,10 +1,24 @@
 
-# auth.py
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+from email_utils import send_registration_email  # Assuming this function is already implemented
+from models import User
+from utils import hash_password, generate_jwt_token, get_db  # Assuming these are defined elsewhere
 
-# Assuming you have a function to handle registration
-def register_user(email, password, telegram_chat_id, email_alerts_enabled, telegram_alerts_enabled):
+router = APIRouter()
+
+# Register User Endpoint
+@router.post("/register")
+async def register_user(
+    email: str,
+    password: str,
+    telegram_chat_id: str,
+    email_alerts_enabled: bool,
+    telegram_alerts_enabled: bool,
+    db: Session = Depends(get_db),  # Assuming you have a function to get db session
+):
     # Hash password
-    hashed_password = hash_password(password)  # assuming hash_password is defined elsewhere
+    hashed_password = hash_password(password)  # Assuming hash_password is defined elsewhere
     
     try:
         # Create the user object
