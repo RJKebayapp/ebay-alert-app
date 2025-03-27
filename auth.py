@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from .models import User
 from .utils import hash_password, generate_jwt_token, get_db
 from .email_utils import send_registration_email
+from auth import router as auth_router
+
 
 router = APIRouter()
 
