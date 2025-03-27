@@ -1,8 +1,16 @@
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any
 
+# Use str instead of EmailStr to avoid validation issues
 class UserBase(BaseModel):
-    email: EmailStr
+    email: str
+    
+    @validator('email')
+    def validate_email(cls, v):
+        # Simple email validation
+        if '@' not in v:
+            raise ValueError('Invalid email format')
+        return v
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6)
@@ -14,6 +22,7 @@ class UserCreate(UserBase):
         return v
 
 class UserUpdate(UserBase):
+    email: Optional[str] = None
     password: Optional[str] = None
     
     @validator('password')
