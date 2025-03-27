@@ -1,22 +1,18 @@
-import os
+
 import postmark
-from dotenv import load_dotenv
+from postmark import PMMail
+import os
 
-load_dotenv()
+POSTMARK_API_KEY = os.getenv("POSTMARK_API_KEY")  # Make sure to set this environment variable
 
-POSTMARK_TOKEN = os.getenv("POSTMARK_TOKEN", "4815cb10-234b-40fd-b407-e48790f30fc2")
-
-def send_registration_email(to_email: str):
+def send_registration_email(email: str):
+    message = PMMail(
+        subject="Please confirm your registration",
+        to=email,
+        sender="no-reply@example.com",  # Change this to your email address
+        html_body="<html><body><h1>Welcome!</h1><p>Thanks for registering. Please confirm your email address.</p></body></html>"
+    )
     try:
-        message = postmark.Message(
-            api_key=POSTMARK_TOKEN,
-            subject="Welcome to the eBay 'Buy It Now' Alert App!",
-            sender="noreply@yourdomain.com",
-            to=to_email,
-            text_body="Thank you for registering with the eBay Alert App. You're now ready to start receiving alerts!",
-            tag="registration-confirmation"
-        )
         message.send()
-        print(f"Confirmation email sent to {to_email}")
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        print(f"Error sending email: {e}")
