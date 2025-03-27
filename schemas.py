@@ -1,37 +1,54 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, validator
+from typing import Optional, List, Dict, Any
 
-class UserCreate(BaseModel):
+class UserBase(BaseModel):
     email: EmailStr
+
+class UserCreate(UserBase):
+    password: str = Field(..., min_length=6)
+    
+    @validator('password')
+    def password_strength(cls, v):
+        if len(v) < 6:
+            raise ValueError('Password must be at least 6 characters')
+        return v
+
+class UserLogin(UserBase):
     password: str
 
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-class TokenData(BaseModel):
-    email: str | None = None
-
-from pydantic import BaseModel, EmailStr
-from typing import Optional
-
-class UserCreate(BaseModel):
-    email: EmailStr
-    password: str
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
+class UserResponse(UserBase):
+    id: int
+    
+    class Config:
+        from_attributes = True
 
 class TokenData(BaseModel):
     email: Optional[str] = None
 
-class UserOut(BaseModel):
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class SavedSearchBase(BaseModel):
+    search_query: str
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    frequency: Optional[str] = "daily"  # daily, hourly, etc.
+    locations: Optional[str] = None
+    listing_type: Optional[str] = "all"  # all, auction, buy_it_now
+
+class SavedSearchCreate(SavedSearchBase):
+    pass
+
+class SavedSearchUpdate(SavedSearchBase):
+    search_query: Optional[str] = None
+    
+class SavedSearchResponse(SavedSearchBase):
     id: int
-    email: EmailStr
-
+    user_id: int
+    
     class Config:
-        orm_mode = True
+        from_attributes = True
 
-class UserUpdate(BaseModel):
-    email: Optional[EmailStr] = None
-    password: Optional[str] = None
+class ErrorResponse(BaseModel):
+    detail: str

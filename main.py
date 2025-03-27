@@ -1,9 +1,14 @@
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import logging
 import sys
 import os
 import traceback
+from sqlalchemy.exc import SQLAlchemyError
+
+# Import routers and configurations
 from auth import router as auth_router
 from protected_routes import router as protected_router
 from user_routes import router as user_router
@@ -12,7 +17,6 @@ from alert_scheduler import check_saved_searches
 from models import Base
 from database_config import engine
 from sqlalchemy import text
-from starlette.middleware.cors import CORSMiddleware
 
 # Set up logging
 logging.basicConfig(
@@ -22,40 +26,60 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+# Create FastAPI app
+app = FastAPI(
+    title="eBay Alert App",
+    description="An API for managing eBay search alerts",
+    version="1.0.0",
+)
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*"],  # Adjust this in production
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include all routers
-app.include_router(auth_router)
-app.include_router(protected_router)
-app.include_router(user_router)
-app.include_router(saved_search_router)
+app.include_router(auth_router, tags=["Authentication"])
+app.include_router(protected_router, tags=["Protected Routes"])
+app.include_router(user_router, tags=["User Management"])
+app.include_router(saved_search_router, tags=["Saved Searches"])
 
-# Global exception handler
+# Exception handlers
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    """Handle SQLAlchemy errors."""
+    logger.error(f"SQLAlchemy error: {str(exc)}")
+    logger.error(traceback.format_exc())
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Database error", "error": str(exc)}
+    )
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    """Handle all other exceptions."""
     error_msg = f"Unhandled exception: {str(exc)}"
     logger.error(error_msg)
     logger.error(traceback.format_exc())
-    return {"detail": "Internal server error", "error": str(exc)}
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal server error", "error": str(exc)}
+    )
 
 # Root endpoint
 @app.get("/")
 def root():
-    return {"message": "Hello from the eBay Alert App!"}
+    """Root endpoint."""
+    return {"message": "Welcome to the eBay Alert App API!"}
 
 # Debug endpoint
 @app.get("/debug")
 async def debug_info():
-    """Return debug information about the environment"""
+    """Return debug information about the environment."""
     import pkg_resources
     
     # Collect basic information
@@ -83,6 +107,7 @@ async def debug_info():
 # Health check endpoint
 @app.get("/health")
 async def health_check():
+    """Health check endpoint."""
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
@@ -93,6 +118,7 @@ async def health_check():
 
 @app.on_event("startup")
 async def startup_event():
+    """Run when the application starts."""
     logger.info("Starting up the application...")
     try:
         # Create tables if they don't exist using the async engine
@@ -118,5 +144,6 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    """Run when the application shuts down."""
     logger.info("Shutting down the application...")
     # Add any cleanup code here if needed
