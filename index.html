@@ -3,25 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>eBay Alert App</title>
+  <title>eBay "Buy It Now" Alert App</title>
   <style>
     body { font-family: sans-serif; margin: 2rem; }
     .section { margin-bottom: 2rem; }
     label { display: block; margin: 0.5rem 0 0.2rem; }
     input, button { padding: 0.5rem; margin-bottom: 1rem; width: 100%; max-width: 300px; }
     .message { margin-top: 1rem; font-weight: bold; }
+    .error { color: red; font-size: 0.9rem; }
   </style>
 </head>
 <body>
-  <h1>eBay Alert App</h1>
+  <h1>eBay "Buy It Now" Alert App</h1>
 
   <div class="section">
     <h2>Register</h2>
     <label>Email</label>
     <input type="email" id="register-email" />
 
-    <label>Password</label>
+    <label>Password (min. 8 characters)</label>
     <input type="password" id="register-password" />
+    <div style="font-size: 0.8rem; color: gray;">Password must be at least 8 characters.</div>
 
     <label>Telegram Chat ID</label>
     <input type="text" id="telegram-chat-id" placeholder="123456789" />
@@ -67,6 +69,19 @@
       const telegramChatId = document.getElementById("telegram-chat-id").value;
       const emailAlerts = document.getElementById("email-alerts").checked;
       const telegramAlerts = document.getElementById("telegram-alerts").checked;
+      const messageBox = document.getElementById("register-message");
+
+      messageBox.innerText = "";
+
+      // Basic frontend validation
+      if (!email.includes("@") || !email.includes(".")) {
+        messageBox.innerText = "Please enter a valid email address.";
+        return;
+      }
+      if (password.length < 8) {
+        messageBox.innerText = "Password must be at least 8 characters.";
+        return;
+      }
 
       fetch("https://ebay-alert-app.onrender.com/register", {
         method: "POST",
@@ -81,8 +96,16 @@
       })
       .then((res) => res.json())
       .then((data) => {
-        document.getElementById("register-message").innerText =
-          data.email ? "Registered successfully!" : data.detail || "Registration failed.";
+        if (data.token) {
+          localStorage.setItem("token", data.token);
+          token = data.token;
+          messageBox.innerText = "Registered successfully!";
+        } else if (data?.detail) {
+          const message = Array.isArray(data.detail) ? data.detail.map(e => e.msg).join(", ") : data.detail;
+          messageBox.innerText = message;
+        } else {
+          messageBox.innerText = "Registration failed.";
+        }
       });
     }
 
