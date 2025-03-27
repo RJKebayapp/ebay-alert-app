@@ -76,14 +76,18 @@ async def startup_event():
     """Run when the application starts."""
     logger.info("Starting up the application...")
     try:
-        # Create tables if they don't exist using the async engine
+        # Drop existing tables
         async with engine.begin() as conn:
-            logger.info("Creating database tables if they don't exist...")
+            logger.info("Dropping existing database tables...")
+            await conn.run_sync(Base.metadata.drop_all)
+        
+        # Create tables
+        async with engine.begin() as conn:
+            logger.info("Creating database tables...")
             await conn.run_sync(Base.metadata.create_all)
         
-        logger.info("Database tables created successfully.")
+        logger.info("Database tables recreated successfully.")
     except Exception as e:
         logger.error(f"Error during startup: {str(e)}")
         logger.error(traceback.format_exc())
-        # Re-raise the exception to prevent the app from starting if critical initialization fails
         raise
