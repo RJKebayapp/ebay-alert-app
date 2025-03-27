@@ -6,6 +6,7 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta
 import os
 import logging
+import traceback
 
 from models import User
 from schemas import TokenData
@@ -15,7 +16,7 @@ from database_config import get_async_session
 logger = logging.getLogger(__name__)
 
 # OAuth2 scheme for token authentication
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 # Environment variables with fallbacks
 SECRET_KEY = os.getenv("JWT_SECRET", "your_secret_key")

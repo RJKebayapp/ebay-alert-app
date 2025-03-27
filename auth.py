@@ -12,6 +12,7 @@ import traceback
 from models import User
 from schemas import UserCreate, UserLogin, TokenData, Token, UserResponse
 from database_config import get_async_session
+from dependencies import get_current_user, create_access_token
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -31,46 +32,6 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     """Hash a password for storing."""
     return pwd_context.hash(password)
-
-def create_access_token(data: dict, expires_delta: timedelta = None):
-    """Create a new JWT token."""
-    to_encode = data.copy()
-    
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-async def get_current_user(token: str = Depends(Token), db: AsyncSession = Depends(get_async_session)):
-    """Decode and verify the JWT token to get the current user."""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    
-    try:
-        payload = jwt.decode(token.access_token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-        token_data = TokenData(email=email)
-    except JWTError:
-        raise credentials_exception
-        
-    try:
-        result = await db.execute(select(User).where(User.email == token_data.email))
-        user = result.scalars().first()
-        if user is None:
-            raise credentials_exception
-        return user
-    except SQLAlchemyError as e:
-        logger.error(f"Database error in get_current_user: {str(e)}")
-        raise HTTPException(status_code=500, detail="Database error")
 
 @router.post("/register", response_model=UserResponse)
 async def register_user(user: UserCreate, db: AsyncSession = Depends(get_async_session)):

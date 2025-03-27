@@ -13,8 +13,20 @@ class UserCreate(UserBase):
             raise ValueError('Password must be at least 6 characters')
         return v
 
+class UserUpdate(UserBase):
+    password: Optional[str] = None
+    
+    @validator('password')
+    def password_strength(cls, v):
+        if v is not None and len(v) < 6:
+            raise ValueError('Password must be at least 6 characters')
+        return v
+
 class UserLogin(UserBase):
     password: str
+
+class UserOut(UserBase):
+    id: int
 
 class UserResponse(UserBase):
     id: int
