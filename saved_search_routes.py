@@ -1,166 +1,233 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from models import SavedSearch, User
-from saved_search_schemas import SavedSearchCreate, SavedSearchOut, SavedSearchUpdate
-from database_config import get_async_session
+from sqlalchemy.exc import SQLAlchemyError
+from typing import List
+import logging
+import traceback
+
+from models import User, SavedSearch
+from schemas import SavedSearchCreate, SavedSearchUpdate, SavedSearchResponse
 from dependencies import get_current_user
+from database_config import get_async_session
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-# Tier-based rules configuration
-TIER_RULES = {
-    "free": {
-        "max_searches": 1,
-        "max_words": 1,
-        "default_frequency": 3600,  # once per hour
-        "allowed_locations": ["USA"]
-    },
-    "mid": {
-        "max_searches": 3,
-        "max_words": 2,
-        "default_frequency": 1800,  # every 30 minutes
-        "max_locations": 5
-    },
-    "top": {
-        "max_searches": 25,
-        "max_words": 5,
-        "default_frequency": 30,    # every 30 seconds
-        "max_locations": None
-    }
-}
-
-@router.get("/saved-searches", response_model=list[SavedSearchOut])
-async def get_saved_searches(
-    current_user: User = Depends(get_current_user), 
-    session: AsyncSession = Depends(get_async_session)
-):
-    result = await session.execute(select(SavedSearch).where(SavedSearch.user_id == current_user.id))
-    searches = result.scalars().all()
-    return searches
-
-@router.post("/saved-searches", response_model=SavedSearchOut)
+@router.post("/saved-searches", response_model=SavedSearchResponse)
 async def create_saved_search(
-    search: SavedSearchCreate, 
-    current_user: User = Depends(get_current_user), 
-    session: AsyncSession = Depends(get_async_session)
+    saved_search: SavedSearchCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
 ):
-    tier = (current_user.subscription_tier or "free").lower()
-    rules = TIER_RULES.get(tier, TIER_RULES["free"])
-
-    # Check existing saved searches count
-    result = await session.execute(select(SavedSearch).where(SavedSearch.user_id == current_user.id))
-    existing_searches = result.scalars().all()
-    if len(existing_searches) >= rules["max_searches"]:
+    """Create a new saved search for the current user."""
+    try:
+        new_saved_search = SavedSearch(
+            user_id=current_user.id,
+            search_query=saved_search.search_query,
+            min_price=saved_search.min_price,
+            max_price=saved_search.max_price,
+            frequency=saved_search.frequency,
+            locations=saved_search.locations,
+            listing_type=saved_search.listing_type
+        )
+        
+        db.add(new_saved_search)
+        await db.commit()
+        await db.refresh(new_saved_search)
+        
+        return new_saved_search
+    except SQLAlchemyError as e:
+        logger.error(f"Database error creating saved search: {str(e)}")
+        logger.error(traceback.format_exc())
+        await db.rollback()
         raise HTTPException(
-            status_code=400, 
-            detail=f"{tier.capitalize()} tier allows only {rules['max_searches']} saved search(es)."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error creating saved search: {str(e)}")
+        logger.error(traceback.format_exc())
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred"
         )
 
-    # Validate search query word count
-    word_count = len(search.search_query.split())
-    if word_count > rules["max_words"]:
+@router.get("/saved-searches", response_model=List[SavedSearchResponse])
+async def get_saved_searches(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """Get all saved searches for the current user."""
+    try:
+        result = await db.execute(
+            select(SavedSearch).where(SavedSearch.user_id == current_user.id)
+        )
+        saved_searches = result.scalars().all()
+        return saved_searches
+    except SQLAlchemyError as e:
+        logger.error(f"Database error retrieving saved searches: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(
-            status_code=400, 
-            detail=f"{tier.capitalize()} tier allows up to {rules['max_words']} word(s) in search query."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error retrieving saved searches: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred"
         )
 
-    # Override frequency with tier's default frequency
-    frequency = rules["default_frequency"]
-
-    # Validate locations (assuming locations are provided as comma-separated string)
-    locations = []
-    if search.locations:
-        locations = [loc.strip() for loc in search.locations.split(",") if loc.strip()]
-    if tier == "free":
-        if any(loc.upper() != "USA" for loc in locations):
-            raise HTTPException(
-                status_code=400, 
-                detail="Free tier only supports searches in USA."
+@router.get("/saved-searches/{saved_search_id}", response_model=SavedSearchResponse)
+async def get_saved_search(
+    saved_search_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
+):
+    """Get a specific saved search by ID."""
+    try:
+        result = await db.execute(
+            select(SavedSearch).where(
+                SavedSearch.id == saved_search_id,
+                SavedSearch.user_id == current_user.id
             )
-    elif tier == "mid":
-        if len(locations) > rules["max_locations"]:
+        )
+        saved_search = result.scalars().first()
+        
+        if saved_search is None:
             raise HTTPException(
-                status_code=400, 
-                detail=f"Mid tier supports up to {rules['max_locations']} locations."
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Saved search not found"
             )
+            
+        return saved_search
+    except SQLAlchemyError as e:
+        logger.error(f"Database error retrieving saved search: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred"
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error retrieving saved search: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred"
+        )
 
-    new_search = SavedSearch(
-        user_id=current_user.id,
-        search_query=search.search_query,
-        min_price=search.min_price,
-        max_price=search.max_price,
-        frequency=frequency,
-        locations=",".join(locations) if locations else None,
-        listing_type=search.listing_type or "Buy It Now New"
-    )
-    session.add(new_search)
-    await session.commit()
-    await session.refresh(new_search)
-    return new_search
-
-@router.put("/saved-searches/{search_id}", response_model=SavedSearchOut)
+@router.put("/saved-searches/{saved_search_id}", response_model=SavedSearchResponse)
 async def update_saved_search(
-    search_id: int, 
-    search_update: SavedSearchUpdate, 
-    current_user: User = Depends(get_current_user), 
-    session: AsyncSession = Depends(get_async_session)
+    saved_search_id: int,
+    saved_search_update: SavedSearchUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
 ):
-    result = await session.execute(
-        select(SavedSearch).where(SavedSearch.id == search_id, SavedSearch.user_id == current_user.id)
-    )
-    saved_search = result.scalars().first()
-    if not saved_search:
-        raise HTTPException(status_code=404, detail="Saved search not found.")
-
-    tier = (current_user.subscription_tier or "free").lower()
-    rules = TIER_RULES.get(tier, TIER_RULES["free"])
-
-    if search_update.search_query:
-        word_count = len(search_update.search_query.split())
-        if word_count > rules["max_words"]:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"{tier.capitalize()} tier allows up to {rules['max_words']} word(s) in search query."
+    """Update a specific saved search by ID."""
+    try:
+        result = await db.execute(
+            select(SavedSearch).where(
+                SavedSearch.id == saved_search_id,
+                SavedSearch.user_id == current_user.id
             )
-        saved_search.search_query = search_update.search_query
+        )
+        saved_search = result.scalars().first()
+        
+        if saved_search is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Saved search not found"
+            )
+            
+        # Update fields if provided
+        if saved_search_update.search_query is not None:
+            saved_search.search_query = saved_search_update.search_query
+        if saved_search_update.min_price is not None:
+            saved_search.min_price = saved_search_update.min_price
+        if saved_search_update.max_price is not None:
+            saved_search.max_price = saved_search_update.max_price
+        if saved_search_update.frequency is not None:
+            saved_search.frequency = saved_search_update.frequency
+        if saved_search_update.locations is not None:
+            saved_search.locations = saved_search_update.locations
+        if saved_search_update.listing_type is not None:
+            saved_search.listing_type = saved_search_update.listing_type
+            
+        # Commit changes
+        db.add(saved_search)
+        await db.commit()
+        await db.refresh(saved_search)
+        
+        return saved_search
+    except SQLAlchemyError as e:
+        logger.error(f"Database error updating saved search: {str(e)}")
+        logger.error(traceback.format_exc())
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred"
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error updating saved search: {str(e)}")
+        logger.error(traceback.format_exc())
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred"
+        )
 
-    if search_update.min_price is not None:
-        saved_search.min_price = search_update.min_price
-    if search_update.max_price is not None:
-        saved_search.max_price = search_update.max_price
-
-    if search_update.locations:
-        locations = [loc.strip() for loc in search_update.locations.split(",") if loc.strip()]
-        if tier == "free" and any(loc.upper() != "USA" for loc in locations):
-            raise HTTPException(status_code=400, detail="Free tier only supports searches in USA.")
-        elif tier == "mid" and len(locations) > rules["max_locations"]:
-            raise HTTPException(status_code=400, detail=f"Mid tier supports up to {rules['max_locations']} locations.")
-        saved_search.locations = ",".join(locations)
-
-    # Enforce tier's default frequency (cannot be updated by user)
-    saved_search.frequency = rules["default_frequency"]
-
-    if search_update.listing_type:
-        saved_search.listing_type = search_update.listing_type
-
-    session.add(saved_search)
-    await session.commit()
-    await session.refresh(saved_search)
-    return saved_search
-
-@router.delete("/saved-searches/{search_id}", status_code=204)
+@router.delete("/saved-searches/{saved_search_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_saved_search(
-    search_id: int, 
-    current_user: User = Depends(get_current_user), 
-    session: AsyncSession = Depends(get_async_session)
+    saved_search_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session)
 ):
-    result = await session.execute(
-        select(SavedSearch).where(SavedSearch.id == search_id, SavedSearch.user_id == current_user.id)
-    )
-    saved_search = result.scalars().first()
-    if not saved_search:
-        raise HTTPException(status_code=404, detail="Saved search not found.")
-    await session.delete(saved_search)
-    await session.commit()
-    return None
+    """Delete a specific saved search by ID."""
+    try:
+        result = await db.execute(
+            select(SavedSearch).where(
+                SavedSearch.id == saved_search_id,
+                SavedSearch.user_id == current_user.id
+            )
+        )
+        saved_search = result.scalars().first()
+        
+        if saved_search is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Saved search not found"
+            )
+            
+        # Delete the saved search
+        await db.delete(saved_search)
+        await db.commit()
+        
+        return None
+    except SQLAlchemyError as e:
+        logger.error(f"Database error deleting saved search: {str(e)}")
+        logger.error(traceback.format_exc())
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred"
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error deleting saved search: {str(e)}")
+        logger.error(traceback.format_exc())
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred"
+        )

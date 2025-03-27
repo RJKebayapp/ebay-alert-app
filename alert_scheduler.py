@@ -1,65 +1,56 @@
 import asyncio
 import logging
-import requests  # For making eBay API calls; replace with your actual implementation if needed.
 from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
-from database_config import get_async_session
-from models import SavedSearch
-from contextlib import asynccontextmanager
+from sqlalchemy.ext.asyncio import AsyncSession
+from database_config import AsyncSessionLocal
+from models import SavedSearch, User
 
+# Set up logging
 logger = logging.getLogger(__name__)
 
-def get_new_items_for_search(search: SavedSearch):
-    """
-    Placeholder function to fetch new items from eBay.
-    Replace this with your actual API call using your eBay API key.
-    """
-    # For now, simulate with a dummy list:
-    return [{"title": "Sample Item", "price": 100}]
-
-def send_email(to_email: str, subject: str, body: str):
-    # Replace with your actual email sending logic.
-    logger.info(f"Sending email to {to_email}: {subject}\n{body}")
-
-def send_telegram(message: str):
-    # Replace with your actual Telegram notification logic.
-    logger.info(f"Sending Telegram message: {message}")
-
-@asynccontextmanager
-async def get_session():
-    """
-    Wrap get_async_session() (which returns an async generator) for use with async with.
-    """
-    session_gen = get_async_session()
-    session = await session_gen.__anext__()
-    try:
-        yield session
-    finally:
-        await session_gen.aclose()
-
 async def check_saved_searches():
-    """
-    Background task that periodically checks saved searches for new items
-    and triggers notifications if items are found.
-    """
+    """Background task to periodically check saved searches and send alerts."""
+    logger.info("Starting saved search checking task")
+    
     while True:
-        async with get_session() as session:
-            # Eagerly load the related user using selectinload
-            result = await session.execute(
-                select(SavedSearch).options(selectinload(SavedSearch.user))
-            )
-            searches = result.scalars().all()
-            for search in searches:
-                new_items = get_new_items_for_search(search)
-                if new_items:
-                    # With the user eagerly loaded, accessing search.user.email won't trigger lazy-loading.
-                    user_email = search.user.email if search.user else "unknown@example.com"
-                    subject = f"New items for your search: {search.search_query}"
-                    body = f"New items: {new_items}"
-                    send_email(user_email, subject, body)
-                    send_telegram(f"New items for {search.search_query}: {new_items}")
-                    logger.info(f"Alert sent for saved search {search.id} for user {search.user_id}")
-                else:
-                    logger.info(f"No new items for saved search {search.id} for user {search.user_id}")
-        logger.info("Sleeping for 60 seconds before next check...")
-        await asyncio.sleep(60)
+        try:
+            # Create a new session for this check
+            async with AsyncSessionLocal() as session:
+                # Get all saved searches
+                result = await session.execute(
+                    select(SavedSearch.id, 
+                           SavedSearch.user_id,
+                           SavedSearch.search_query,
+                           SavedSearch.min_price,
+                           SavedSearch.max_price,
+                           SavedSearch.frequency,
+                           SavedSearch.locations,
+                           SavedSearch.listing_type)
+                )
+                saved_searches = result.all()
+                
+                logger.info(f"Found {len(saved_searches)} saved searches to check")
+                
+                # Process each saved search
+                for search in saved_searches:
+                    try:
+                        # Here you would implement the logic to:
+                        # 1. Query eBay API for the search
+                        # 2. Check for new results
+                        # 3. Send alerts if there are new results
+                        
+                        # For now, just log that we're checking
+                        logger.info(f"Checking saved search: {search.search_query}")
+                        
+                    except Exception as e:
+                        logger.error(f"Error processing saved search {search.id}: {str(e)}")
+                        continue
+                
+            # Sleep for a minute before the next check
+            logger.info("Sleeping for 60 seconds before next check...")
+            await asyncio.sleep(60)
+            
+        except Exception as e:
+            logger.error(f"Error in check_saved_searches: {str(e)}")
+            # Sleep for a bit before trying again
+            await asyncio.sleep(60)

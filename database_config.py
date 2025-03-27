@@ -1,25 +1,47 @@
-
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-from dotenv import load_dotenv
 import os
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+import logging
 
-load_dotenv()
+logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.getenv("DATABASE_URL") or \
-    f"postgresql+asyncpg://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@" \
-    f"{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
-
-engine = create_async_engine(DATABASE_URL, echo=True)
-
-async_session_maker = sessionmaker(
-    bind=engine,
-    expire_on_commit=False,
-    class_=AsyncSession
+# Get database URL from environment variable with fallback
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", 
+    "postgresql+asyncpg://postgres:password@localhost/ebay_app"
 )
 
-Base = declarative_base()
+# Create async engine
+try:
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=True,  # Set to False in production
+        future=True,
+        pool_pre_ping=True,  # Ensures connections are valid before use
+        pool_size=10,  # Adjust based on your needs
+        max_overflow=20
+    )
+    logger.info("Database engine created successfully")
+except Exception as e:
+    logger.error(f"Failed to create database engine: {str(e)}")
+    raise
 
-async def get_async_session() -> AsyncSession:
-    async with async_session_maker() as session:
+# Create async session factory
+AsyncSessionLocal = sessionmaker(
+    engine, 
+    class_=AsyncSession, 
+    expire_on_commit=False,
+    autoflush=False
+)
+
+async def get_async_session():
+    """Dependency for getting an async database session."""
+    session = AsyncSessionLocal()
+    try:
         yield session
+    except Exception as e:
+        logger.error(f"Database session error: {str(e)}")
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
